@@ -1,0 +1,807 @@
+import numpy as np
+import pandas as pd
+import cv2
+import os
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from keras.utils import to_categorical
+from sklearn.metrics import accuracy_score
+from google.colab import files
+import matplotlib.pyplot as plt
+
+
+# ------------------------ Load Data ------------------------
+dataset = pd.read_csv("/content/drive/MyDrive/heart.csv")
+
+# ------------------------ Custom Priority Feature Order ------------------------
+# Define features in your custom clinical priority order
+custom_feature_order = [
+    'cp', 'thalach', 'oldpeak', 'exang', 'ca', 'thal',
+    'slope', 'restecg', 'trestbps', 'chol', 'age', 'sex', 'fbs'
+]
+
+# Filter dataset to only these features (if all are present)
+predictors = dataset[custom_feature_order]
+target = dataset["target"]
+
+# ------------------------ Train/Test Split ------------------------
+X_train, X_test, Y_train, Y_test = train_test_split(predictors, target, train_size=0.80, random_state=0)
+
+# ------------------------ Best Random State Search ------------------------
+max_accuracy = 0
+best_x = 0
+
+for x in range(500):
+    rf = RandomForestClassifier(random_state=x)
+    rf.fit(X_train, Y_train)
+    Y_pred_rf = rf.predict(X_test)
+    acc = accuracy_score(Y_pred_rf, Y_test)
+    if acc > max_accuracy:
+        max_accuracy = acc
+        best_x = x
+
+# ------------------------ Final Model ------------------------
+rf = RandomForestClassifier(random_state=best_x)
+rf.fit(X_train, Y_train)
+.........................................................................................................................................
+
+from sklearn.metrics import confusion_matrix, classification_report, f1_score, precision_score, recall_score, accuracy_score
+
+# Predict on the test data
+Y_pred_rf = rf.predict(X_test)
+
+# Accuracy
+accuracy = accuracy_score(Y_test, Y_pred_rf)
+print(f"\n✅ Accuracy: {accuracy:.2f}")
+
+# Precision, Recall, F1-score
+precision = precision_score(Y_test, Y_pred_rf)
+recall = recall_score(Y_test, Y_pred_rf)
+f1 = f1_score(Y_test, Y_pred_rf)
+
+print(f"🎯 Precision: {precision:.2f}")
+print(f"📈 Recall: {recall:.2f}")
+print(f"📊 F1 Score: {f1:.2f}")
+
+# Classification Report (includes all metrics)
+print("\n📋 Classification Report:")
+print(classification_report(Y_test, Y_pred_rf))
+
+# Confusion Matrix
+conf_matrix = confusion_matrix(Y_test, Y_pred_rf)
+print("\n🧮 Confusion Matrix:")
+print(conf_matrix)
+......................................................................................................................................
+from sklearn.tree import plot_tree
+import matplotlib.pyplot as plt
+
+# Train the Random Forest Classifier with the best random_state
+rf = RandomForestClassifier(random_state=best_x)
+rf.fit(X_train, Y_train)
+
+# Plot one of the trees from the random forest
+plt.figure(figsize=(20, 10))
+plot_tree(rf.estimators_[0], filled=True, feature_names=X_train.columns, class_names=['0', '1'], rounded=True, fontsize=12)
+plt.show()
+.........................................................................................................................................
+#singal values
+def predict_clinical():
+    print("Enter Clinical Data:")
+    cp = int(input("Chest Pain Type (1: Typical Angina, 2: Atypical Angina, 3: Non-Anginal, 4: Asymptomatic): "))
+    thalach = float(input("Maximum Heart Rate Achieved: "))
+    oldpeak = float(input("ST Depression Induced by Exercise: "))
+    exang = int(input("Exercise-Induced Angina (1: Yes, 0: No): "))
+    ca = int(input("Number of Major Vessels (0-3): "))
+    thal = int(input("Thal (3: Normal, 6: Fixed Defect, 7: Reversible Defect): "))
+    slope = int(input("Slope of ST Segment (1: Upsloping, 2: Flat, 3: Downsloping): "))
+    restecg = int(input("Resting ECG (0: Normal, 1: Abnormal, 2: Probable Hypertrophy): "))
+    trestbps = float(input("Resting Blood Pressure: "))
+    chol = float(input("Serum Cholesterol (mg/dl): "))
+    age = float(input("Age: "))
+    sex = int(input("Sex (1: Male, 0: Female): "))
+    fbs = int(input("Fasting Blood Sugar > 120 mg/dl (1: Yes, 0: No): "))
+
+    # Create input using same feature order used in training
+    custom_feature_order = [
+        'cp', 'thalach', 'oldpeak', 'exang', 'ca', 'thal',
+        'slope', 'restecg', 'trestbps', 'chol', 'age', 'sex', 'fbs'
+    ]
+
+    input_values = [[cp, thalach, oldpeak, exang, ca, thal,
+                     slope, restecg, trestbps, chol, age, sex, fbs]]
+
+    input_data = pd.DataFrame(input_values, columns=custom_feature_order)
+
+    prediction = rf.predict(input_data)[0]
+    print(f"\n📊 Clinical Prediction: {'Normal' if prediction == 0 else 'Abnormal'}")
+
+
+predict_clinical()
+
+    #0,168,1,0,2,3,2,1,125,212,52,1,0-normal
+                                 #0,103,1,0,0,2,1,0,100,248,58,0,0 - abnormal
+.................................................................................................................................
+# ------------------------------- ECG Image Model -------------------------------
+# Load data function for ECG image dataset (same code as before)
+from keras.utils import to_categorical
+path = "/content/drive/MyDrive/test"
+def load_data(path, label_dict):
+    data = []
+    label = []
+    for cat, label_value in label_dict.items():
+        pic_list = os.path.join(path, cat)
+        for img in os.listdir(pic_list):
+            image_path = os.path.join(pic_list, img)
+            image = cv2.imread(image_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.resize(image, (224, 224))  # Resize to 224x224
+            data.append(image)
+            label.append(label_value)
+    return np.array(data), np.array(label)
+
+label_dict = {
+    'ECG Images of Myocardial Infarction Patients (240x12=2880)': 3,
+    'ECG Images of Patient that have History of MI (172x12=2064)': 2,
+    'ECG Images of Patient that have abnormal heartbeat (233x12=2796)': 1,
+    'Normal Person ECG Images (284x12=3408)': 0
+}
+
+# Get raw labels (0–3) BEFORE one-hot encoding
+data, label = load_data(path, label_dict)  # label is 1D, e.g., [3, 0, 1, 2, ...]
+
+# Normalize image data
+data = data.astype('float32') / 255.0
+
+
+
+# Stratified train-test split using raw labels
+train_data, test_data, label_train_int, label_test_int = train_test_split(
+    data, label, test_size=0.2, random_state=42, stratify=label
+)
+
+# One-hot encode after splitting
+num_classes = len(label_dict)
+train_label = to_categorical(label_train_int, num_classes)
+test_label = to_categorical(label_test_int, num_classes)
+
+# Flatten the training data
+train_data_flatten = train_data.reshape(train_data.shape[0], -1)
+
+
+# Train SVM model
+svm_model = SVC(kernel='linear', C=1.0, random_state=42)
+svm_model.fit(train_data_flatten, np.argmax(train_label, axis=1))
+.................................................................................................................................
+from sklearn.metrics import confusion_matrix, classification_report, f1_score, precision_score, recall_score, accuracy_score
+# Flatten the test data before prediction
+test_data_flatten = test_data.reshape(test_data.shape[0], -1)
+
+# Predict the labels for the test set
+predictions = svm_model.predict(test_data_flatten)
+
+# Convert one-hot encoded test labels back to class indices
+true_labels = np.argmax(test_label, axis=1)
+
+# Accuracy
+accuracy = accuracy_score(true_labels, predictions)
+# Precision, Recall, F1-score (macro average since it's multi-class)
+precision = precision_score(true_labels, predictions, average='macro')
+recall = recall_score(true_labels, predictions, average='macro')
+f1 = f1_score(true_labels, predictions, average='macro')
+
+print(f"🎯 Precision (macro): {precision:.2f}")
+print(f"📈 Recall (macro): {recall:.2f}")
+print(f"📊 F1 Score (macro): {f1:.2f}")
+
+# Classification Report
+print("\n📋 Classification Report:")
+print(classification_report(true_labels, predictions))
+
+# Confusion Matrix
+print("\n🧮 Confusion Matrix:")
+print(confusion_matrix(true_labels, predictions))
+...........................................................................................................................................
+#preprocessing steps of ecg
+import cv2
+import matplotlib.pyplot as plt
+
+# Path to the saved ECG image
+image_path = "/content/drive/MyDrive/test/ECG Images of Myocardial Infarction Patients (240x12=2880)/test (1).jpg"
+
+# Read image in BGR format
+image_bgr = cv2.imread(image_path)
+original_image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+# Show original BGR image (colors will look incorrect)
+plt.figure(figsize=(4, 4))
+plt.imshow(image_bgr)
+plt.title("Original Image (BGR)")
+plt.axis('off')
+plt.show()
+
+plt.figure(figsize=(4, 4))
+plt.imshow(original_image_rgb)
+plt.title("Original Image (BGR)")
+plt.axis('off')
+plt.show()
+
+# Resize image for CNN/SVM input
+image_resized = cv2.resize(original_image_rgb, (224, 224))
+
+plt.imshow(image_resized)
+plt.title("Resized Image (224x224)")
+plt.axis('off')
+plt.show()
+
+# Normalize pixel values to [0, 1]
+image_normalized = image_resized.astype('float32') / 255.0
+
+plt.imshow(image_normalized)
+plt.title("Normalized Image (0–1 Range)")
+plt.axis('off')
+plt.show()
+.............................................................................................................................
+def predict_ecg_image():
+    print("\n📤 Upload ECG Image:")
+    uploaded = files.upload()
+    image_path = list(uploaded.keys())[0]
+
+    # Preprocess the uploaded image
+    image = cv2.imread(image_path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (224, 224))
+    image = image.astype('float32') / 255.0
+    image_flatten = image.reshape(1, -1)
+
+    # Predict using trained SVM model
+    prediction_index = svm_model.predict(image_flatten)[0]
+
+    # Map the label back to class name
+    class_map = {
+        0: 'Normal',
+        1: 'Abnormal Heartbeat',
+        2: 'History of MI',
+        3: 'Myocardial Infarction'
+    }
+
+    predicted_label = class_map[prediction_index]
+    print(f"Predicted Class Label: {predicted_label}\nPredicted Class Index: {prediction_index}")
+
+    return prediction_index, predicted_label
+ecg_index, ecg_label = predict_ecg_image()
+...............................................................................................................
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+import cv2
+
+# Define class names for better readability
+clinical_classes = {
+    0: "Normal",
+    1: "Abnormal"
+}
+
+ecg_classes = {
+    0: "Normal",
+    1: "Abnormal Heartbeat",
+    2: "History of MI",
+    3: "Myocardial Infarction"
+}
+
+fusion_classes = {
+    0: "Normal",
+    1: "Consult Doctor",
+    2: "Myocardial Infarction",
+
+}
+
+def fusion_logic(clinical_pred, ecg_pred):
+    """
+    Apply fusion logic based on the rules:
+    - normal clinical + normal ecg → normal patient
+    - normal clinical + (history/abnormal ecg) → consult doctor
+    - normal clinical + MI ecg → MI
+    - abnormal clinical + normal ecg → consult doctor
+    - abnormal clinical + (history/abnormal/MI ecg) → MI
+    """
+    # Clinical pred: 0 = Normal, 1 = Abnormal
+    # ECG pred: 0 = Normal, 1 = Abnormal, 2 = History, 3 = MI
+
+    if clinical_pred == 0:  # Normal clinical
+        if ecg_pred == 0:  # Normal ECG
+            return 0  # Normal
+        elif ecg_pred in [1, 2]:  # Abnormal or History ECG
+            return 1  # Consult Doctor
+        else:  # MI ECG
+            return 2  #  MI
+    else:  # Abnormal clinical
+        if ecg_pred == 0:  # Normal ECG
+            return 1  # Consult Doctor
+        else:  # Abnormal, History, or MI ECG
+            return 2  #  MI
+
+def predict_fusion(clinical_data, ecg_image, clinical_model, ecg_model):
+    """
+    Make predictions using both models and apply fusion logic
+    """
+    # Predict with clinical model
+    clinical_pred = clinical_model.predict([clinical_data])[0]
+
+    # Preprocess ECG image
+    img = cv2.cvtColor(ecg_image, cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (224, 224))
+    img = img.astype('float32') / 255.0
+    img_flatten = img.reshape(1, -1)
+
+    # Predict with ECG model
+    ecg_pred = ecg_model.predict(img_flatten)[0]
+
+    # Apply fusion logic
+    fusion_result = fusion_logic(clinical_pred, ecg_pred)
+
+    return {
+        "clinical_pred": clinical_classes[clinical_pred],
+        "ecg_pred": ecg_classes[ecg_pred],
+        "fusion_pred": fusion_classes[fusion_result]
+    }
+
+def generate_report(results):
+    """
+    Generate a formatted report based on fusion results
+    """
+    fusion_class = results["fusion_pred"]
+
+    # Define risk levels and recommendations
+    risk_levels = {
+        "Normal": "Low Risk",
+        "Consult Doctor": "Medium Risk",
+        "History of Myocardial Infarction": "High Risk",
+        "Myocardial Infarction": "Critical Risk"
+    }
+
+    recommendations = {
+        "Normal": "No significant cardiac abnormalities detected. Maintain healthy lifestyle.",
+        "Consult Doctor": "Some concerning indicators present. Medical consultation recommended.",
+        "History of Myocardial Infarction": "Signs consistent with a history of myocardial infarction (heart attack). Regular medical follow-up and management of cardiac risk factors is strongly advised.",
+        "Myocardial Infarction": "URGENT: Signs consistent with an active or recent myocardial infarction. Immediate medical attention required."
+    }
+
+    report = f"""**Prediction Results**
+
+Clinical Model Prediction:
+{results['clinical_pred']}
+
+ECG Model Prediction:
+{results['ecg_pred']}
+
+Fusion Model Prediction:
+{results['fusion_pred']}
+
+{risk_levels[fusion_class]}
+{recommendations[fusion_class]}
+"""
+    return report
+
+# Example of how to use the fusion model
+def demo_fusion_model(clinical_features, ecg_image_path, clinical_model, ecg_model):
+    """
+    Demonstrate the fusion model with sample data
+    """
+    # Load ECG image
+    ecg_image = cv2.imread(ecg_image_path)
+
+    # Get predictions
+    results = predict_fusion(clinical_features, ecg_image, clinical_model, ecg_model)
+
+    # Generate report
+    report = generate_report(results)
+
+    # Visualization
+    plt.figure(figsize=(12, 8))
+
+    # Display ECG image
+    plt.subplot(2, 1, 1)
+    plt.imshow(cv2.cvtColor(ecg_image, cv2.COLOR_BGR2RGB))
+    plt.title("ECG Image")
+    plt.axis('off')
+
+    # Display results
+    plt.subplot(2, 1, 2)
+    plt.axis('off')
+    plt.text(0.1, 0.9, f"Clinical: {results['clinical_pred']}", fontsize=12)
+    plt.text(0.1, 0.7, f"ECG: {results['ecg_pred']}", fontsize=12)
+    plt.text(0.1, 0.5, f"Fusion: {results['fusion_pred']}", fontsize=12, fontweight='bold')
+    plt.text(0.1, 0.3, f"🧠 AI Assessment Complete", fontsize=14)
+
+    plt.tight_layout()
+    plt.show()
+
+    print(report)
+    return results
+.....................................................................................................................
+
+def predict_fusion(clinical_data, ecg_image, clinical_model, ecg_model):
+    """
+    Make predictions using both models and apply fusion logic
+    """
+    # Predict with clinical model
+    clinical_pred = clinical_model.predict([clinical_data])[0]
+
+    # Preprocess ECG image
+    img = cv2.cvtColor(ecg_image, cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (224, 224))
+    img = img.astype('float32') / 255.0
+    img_flatten = img.reshape(1, -1)
+
+    # Predict with ECG model
+    ecg_pred = ecg_model.predict(img_flatten)[0]
+
+    # Apply fusion logic
+    fusion_result = fusion_logic(clinical_pred, ecg_pred)
+
+    # Calculate a simple consultation risk percentage based on the results
+    if fusion_result == 0:  # Normal
+        consult_percentage = 5  # Low risk, routine checkups only
+    elif fusion_result == 1:  # Consult Doctor
+        consult_percentage = 75  # Medium risk, consultation recommended
+    else:  # MI
+        consult_percentage = 9  # High risk, urgent attention needed
+
+    return {
+        "clinical_pred": clinical_classes[clinical_pred],
+        "ecg_pred": ecg_classes[ecg_pred],
+        "fusion_pred": fusion_classes[fusion_result],
+        "consult_percentage": consult_percentage
+    }
+
+def predict_for_new_patient(clinical_data, ecg_image_path, clinical_model, ecg_model):
+    """
+    Make a prediction for a new patient
+
+    Parameters:
+    - clinical_data: list of clinical features in the custom_feature_order
+    - ecg_image_path: path to the patient's ECG image
+    - clinical_model: trained clinical model
+    - ecg_model: trained ECG model
+    """
+    try:
+        # Load and preprocess ECG image
+        ecg_image = cv2.imread(ecg_image_path)
+        if ecg_image is None:
+            return "Error: Could not load ECG image."
+
+        # Get predictions using the predict_fusion function
+        results = predict_fusion(clinical_data, ecg_image, clinical_model, ecg_model)
+
+        # Generate report
+        report = generate_report(results)
+
+        # Display results
+        print("\n" + report)
+
+        return results
+
+    except Exception as e:
+        return f"Error during prediction: {str(e)}"
+
+'''
+# Example usage:
+patient_clinical_data = [0, 168, 1, 0, 2, 3, 2, 1, 125, 212, 52, 1, 0]
+patient_ecg_image_path = "/content/drive/MyDrive/test/ECG Images of Myocardial Infarction Patients (240x12=2880)/test (10).jpg"
+'''
+.................................................................................................................................
+import pandas as pd
+import cv2
+from google.colab import files
+
+def manual_input_predict():
+    print("Please enter the following details:")
+
+    # Match the custom clinical priority order
+    cp = int(input("Chest Pain Type (1: Typical Angina, 2: Atypical Angina, 3: Non-Anginal, 4: Asymptomatic): "))
+    thalach = float(input("Maximum Heart Rate Achieved: "))
+    oldpeak = float(input("ST Depression Induced by Exercise Relative to Rest: "))
+    exang = int(input("Exercise-Induced Angina (1: Yes, 0: No): "))
+    ca = int(input("Number of Major Vessels Colored by Fluoroscopy (0-3): "))
+    thal = int(input("Thal (3: Normal, 6: Fixed Defect, 7: Reversible Defect): "))
+    slope = int(input("Slope of the Peak Exercise ST Segment (1, 2, 3): "))
+    restecg = int(input("Resting Electrocardiographic Results (0, 1, 2): "))
+    trestbps = float(input("Resting Blood Pressure: "))
+    chol = float(input("Serum Cholesterol (mg/dl): "))
+    age = float(input("Age: "))
+    sex = int(input("Sex (1: Male, 0: Female): "))
+    fbs = int(input("Fasting Blood Sugar > 120 mg/dl (1: Yes, 0: No): "))
+
+    # Ensure the input is in the same order used during model training
+    patient_clinical_data = [
+        cp, thalach, oldpeak, exang, ca, thal, slope, restecg,
+        trestbps, chol, age, sex, fbs
+    ]
+
+    print("\nUpload ECG Image File (.jpg or .png):")
+    uploaded = files.upload()
+    if not uploaded:
+        print("Error: No file uploaded.")
+        return  # Return None if no file uploaded to exit cleanly
+
+    patient_ecg_image_path = list(uploaded.keys())[0]
+
+    # Return both the clinical data and the image path
+    return patient_clinical_data, patient_ecg_image_path
+
+
+
+
+# Call the manual input function and get the returned values
+patient_clinical_data, patient_ecg_image_path = manual_input_predict()
+predict_for_new_patient(patient_clinical_data, patient_ecg_image_path, rf, svm_model) #54,1,0,120,188,0,1,113,0,1.4,1,1,3-normal
+                                                                                       #50,0,0,110,254,0,0,159,0,0,2,0,2 - abnormal
+...........................................................................................................................
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import cv2
+import os
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from keras.utils import to_categorical
+import seaborn as sns
+
+# Assuming you have the fusion_logic and other necessary functions from your previous code
+
+def evaluate_fusion_model(clinical_test_data, ecg_test_data, clinical_test_labels, ecg_test_labels,
+                          clinical_model, ecg_model, test_size=100):
+    """
+    Evaluate the fusion model using test data
+
+    Parameters:
+    - clinical_test_data: Clinical features for test patients
+    - ecg_test_data: ECG images for test patients
+    - clinical_test_labels: True clinical labels
+    - ecg_test_labels: True ECG labels
+    - clinical_model: Trained clinical model
+    - ecg_model: Trained ECG model
+    - test_size: Number of test samples to evaluate (default: 100)
+
+    Returns:
+    - Dictionary with evaluation metrics
+    """
+    # Ensure we don't exceed available test data
+    test_size = min(test_size, len(clinical_test_data), len(ecg_test_data))
+
+    # Prepare arrays for predictions and true labels
+    clinical_preds = []
+    ecg_preds = []
+    fusion_preds = []
+
+    # We need to determine ground truth for fusion results based on our fusion logic
+    fusion_true_labels = []
+
+    # For each test sample
+    for i in range(test_size):
+        # Get clinical prediction
+        clinical_pred = clinical_model.predict([clinical_test_data.iloc[i]])[0]
+        clinical_preds.append(clinical_pred)
+
+        # Process ECG image
+        ecg_image = ecg_test_data[i]
+        img_flatten = ecg_image.reshape(1, -1)
+
+        # Get ECG prediction
+        ecg_pred = ecg_model.predict(img_flatten)[0]
+        ecg_preds.append(ecg_pred)
+
+        # Apply fusion logic
+        fusion_result = fusion_logic(clinical_pred, ecg_pred)
+        fusion_preds.append(fusion_result)
+
+        # Determine true fusion label based on true clinical and ECG labels
+        true_clinical = clinical_test_labels.iloc[i]
+        true_ecg = ecg_test_labels[i]
+        true_fusion = fusion_logic(true_clinical, true_ecg)
+        fusion_true_labels.append(true_fusion)
+
+    # Calculate metrics
+    clinical_accuracy = accuracy_score(clinical_test_labels[:test_size], clinical_preds)
+    ecg_accuracy = accuracy_score(ecg_test_labels[:test_size], ecg_preds)
+    fusion_accuracy = accuracy_score(fusion_true_labels, fusion_preds)
+
+    clinical_f1 = f1_score(clinical_test_labels[:test_size], clinical_preds, average='weighted')
+    ecg_f1 = f1_score(ecg_test_labels[:test_size], ecg_preds, average='weighted')
+    fusion_f1 = f1_score(fusion_true_labels, fusion_preds, average='weighted')
+
+    # Get confusion matrices
+    clinical_cm = confusion_matrix(clinical_test_labels[:test_size], clinical_preds)
+    ecg_cm = confusion_matrix(ecg_test_labels[:test_size], ecg_preds)
+    fusion_cm = confusion_matrix(fusion_true_labels, fusion_preds)
+
+    # Get detailed classification reports
+    clinical_report = classification_report(clinical_test_labels[:test_size], clinical_preds, output_dict=True)
+    ecg_report = classification_report(ecg_test_labels[:test_size], ecg_preds, output_dict=True)
+    fusion_report = classification_report(fusion_true_labels, fusion_preds, output_dict=True)
+
+    # Return all metrics
+    metrics = {
+        'clinical_accuracy': clinical_accuracy,
+        'ecg_accuracy': ecg_accuracy,
+        'fusion_accuracy': fusion_accuracy,
+        'clinical_f1': clinical_f1,
+        'ecg_f1': ecg_f1,
+        'fusion_f1': fusion_f1,
+        'clinical_cm': clinical_cm,
+        'ecg_cm': ecg_cm,
+        'fusion_cm': fusion_cm,
+        'clinical_report': clinical_report,
+        'ecg_report': ecg_report,
+        'fusion_report': fusion_report
+    }
+
+    return metrics
+
+def plot_evaluation_results(metrics):
+    """
+    Plot the evaluation results
+
+    Parameters:
+    - metrics: Dictionary with evaluation metrics
+    """
+    # Set up the figure
+    plt.figure(figsize=(15, 12))
+
+    # Plot accuracy comparison
+    plt.subplot(2, 2, 1)
+    models = ['Clinical', 'ECG', 'Fusion']
+    accuracies = [metrics['clinical_accuracy'], metrics['ecg_accuracy'], metrics['fusion_accuracy']]
+    plt.bar(models, accuracies, color=['skyblue', 'lightgreen', 'coral'])
+    plt.title('Accuracy Comparison')
+    plt.ylim(0, 1)
+    for i, v in enumerate(accuracies):
+        plt.text(i, v + 0.02, f'{v:.2f}', ha='center')
+
+    # Plot F1 score comparison
+    plt.subplot(2, 2, 2)
+    f1_scores = [metrics['clinical_f1'], metrics['ecg_f1'], metrics['fusion_f1']]
+    plt.bar(models, f1_scores, color=['skyblue', 'lightgreen', 'coral'])
+    plt.title('F1 Score Comparison')
+    plt.ylim(0, 1)
+    for i, v in enumerate(f1_scores):
+        plt.text(i, v + 0.02, f'{v:.2f}', ha='center')
+
+    # Plot confusion matrices
+    plt.subplot(2, 3, 4)
+    sns.heatmap(metrics['clinical_cm'], annot=True, fmt='d', cmap='Blues', cbar=False)
+    plt.title('Clinical Model Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+
+    plt.subplot(2, 3, 5)
+    sns.heatmap(metrics['ecg_cm'], annot=True, fmt='d', cmap='Greens', cbar=False)
+    plt.title('ECG Model Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+
+    plt.subplot(2, 3, 6)
+    sns.heatmap(metrics['fusion_cm'], annot=True, fmt='d', cmap='Oranges', cbar=False)
+    plt.title('Fusion Model Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+
+    plt.tight_layout()
+    plt.show()
+
+    # Print detailed reports
+    print("\nClinical Model Classification Report:")
+    print(pd.DataFrame(metrics['clinical_report']).T)  # Convert dict to DataFrame for better display
+
+    print("\nECG Model Classification Report:")
+    print(pd.DataFrame(metrics['ecg_report']).T)
+
+    print("\nFusion Model Classification Report:")
+    print(pd.DataFrame(metrics['fusion_report']).T)
+
+def run_evaluation_pipeline():
+    """
+    Run the complete evaluation pipeline
+    """
+    print("Starting evaluation pipeline...")
+
+    # Load and prepare clinical data
+    print("Loading clinical data...")
+    dataset = pd.read_csv("/content/drive/MyDrive/heart.csv")
+
+    # Define features in your custom clinical priority order
+    custom_feature_order = [
+        'cp', 'thalach', 'oldpeak', 'exang', 'ca', 'thal',
+        'slope', 'restecg', 'trestbps', 'chol', 'age', 'sex', 'fbs'
+    ]
+
+    # Filter dataset to only these features
+    predictors = dataset[custom_feature_order]
+    target = dataset["target"]
+
+    # Train/Test Split for clinical data
+    X_train, X_test, Y_train, Y_test = train_test_split(predictors, target, train_size=0.80, random_state=0)
+
+    # Train clinical model
+    print("Training clinical model...")
+    rf = RandomForestClassifier(random_state=42)
+    rf.fit(X_train, Y_train)
+
+    # Load and prepare ECG image data
+    print("Loading ECG image data...")
+
+    # Define path to ECG images
+    path = "/content/drive/MyDrive/test"
+
+    # Define label dictionary
+    label_dict = {
+        'ECG Images of Myocardial Infarction Patients (240x12=2880)': 3,
+        'ECG Images of Patient that have History of MI (172x12=2064)': 2,
+        'ECG Images of Patient that have abnormal heartbeat (233x12=2796)': 1,
+        'Normal Person ECG Images (284x12=3408)': 0
+    }
+
+    # Load ECG data
+    def load_data(path, label_dict):
+        data = []
+        label = []
+        for cat, label_value in label_dict.items():
+            pic_list = os.path.join(path, cat)
+            for img in os.listdir(pic_list):
+                image_path = os.path.join(pic_list, img)
+                image = cv2.imread(image_path)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                image = cv2.resize(image, (224, 224))  # Resize to 224x224
+                data.append(image)
+                label.append(label_value)
+        return np.array(data), np.array(label)
+
+    # Get raw labels
+    data, label = load_data(path, label_dict)
+
+    # Normalize image data
+    data = data.astype('float32') / 255.0
+
+    # Split ECG data
+    train_data, test_data, label_train_int, label_test_int = train_test_split(
+        data, label, test_size=0.2, random_state=42, stratify=label
+    )
+
+    # Flatten ECG data
+    train_data_flatten = train_data.reshape(train_data.shape[0], -1)
+    test_data_flatten = test_data.reshape(test_data.shape[0], -1)
+
+    # Train ECG model
+    print("Training ECG model...")
+    svm_model = SVC(kernel='linear', C=1.0, random_state=42)
+    svm_model.fit(train_data_flatten, label_train_int)
+
+    # Evaluate models
+    print("Evaluating models...")
+    metrics = evaluate_fusion_model(
+        X_test, test_data, Y_test, label_test_int, rf, svm_model
+    )
+
+    # Display results
+    print("\nEvaluation Results:")
+    print(f"Clinical Model Accuracy: {metrics['clinical_accuracy']:.4f}")
+    print(f"ECG Model Accuracy: {metrics['ecg_accuracy']:.4f}")
+    print(f"Fusion Model Accuracy: {metrics['fusion_accuracy']:.4f}")
+    print(f"Clinical Model F1 Score: {metrics['clinical_f1']:.4f}")
+    print(f"ECG Model F1 Score: {metrics['ecg_f1']:.4f}")
+    print(f"Fusion Model F1 Score: {metrics['fusion_f1']:.4f}")
+
+    # Plot results
+    plot_evaluation_results(metrics)
+
+    return metrics
+
+# Run the evaluation
+if __name__ == "__main__":
+    evaluation_results = run_evaluation_pipeline()
+..............................................................................................................
