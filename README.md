@@ -12,8 +12,13 @@ This project implements a hybrid machine learning framework to predict the risk 
 📊 The system includes data preprocessing, model training, evaluation, and visualization, making it practical for clinical decision support.
 
 Tech Stack:
+
 Python 3.x
+
 Scikit-learn, NumPy, Pandas
+
 OpenCV, Matplotlib
+
 TensorFlow/Keras (for preprocessing/encoding)
+
 Google Colab / Jupyter Notebook
